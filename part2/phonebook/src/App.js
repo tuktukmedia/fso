@@ -1,31 +1,9 @@
 import { useState, useEffect } from 'react'
-import axios from 'axios'
-
-const ListNumbers = ({name, number}) => 
-  <p>
-    {name} {number}
-  </p>
-
-const Filter = ({handleInputFilter}) => 
-  <div>
-    filter shown with <input onChange={handleInputFilter} />
-  </div>
-
-const Form = ({handleSubmit, handleInputName, newName, handleInputNumber, newNumber}) => {
-  return (
-    <form onSubmit={handleSubmit}  >
-      <div>
-         name: <input onChange={handleInputName} value={newName} />
-      </div>
-      <div>
-         number: <input onChange={handleInputNumber} value={newNumber} />
-      </div>
-      <div>
-        <button type="submit">add</button>
-      </div>
-    </form>
-  )
-} 
+import personServices from './services/persons.js'
+import Form from './components/Form.js'
+import Filter from './components/Filter.js'
+import ListNumbers from './components/ListNumbers.js'
+import Notification from './components/Notification.js'
 
 const App = () => {
   //Luettelen ihmiset
@@ -33,15 +11,13 @@ const App = () => {
 
   //Haetaan ihmiset json-serveriltä. useeffectin avulla vain kerran.
   useEffect(() => {
-    console.log('effect')
-    axios
-      .get('http://localhost:3001/persons')
+    console.log('Haetaan tiedot')
+    personServices.getAll()
       .then(response => {
-        console.log('promise fulfilled')
+        console.log('Tiedot haettu')
         setPersons(response.data)
       })
   }, [])
-  console.log('render', persons.length, 'persons')
 
   // Uusi nimi input fieldistä tallennetaan tähän
   const [newName, setNewName] = useState('')
@@ -54,6 +30,9 @@ const App = () => {
 
   // filtteri inputin sisältö tallennetaan tähän
   const [newFilter, setNewFilter] = useState('')
+
+  const [positive, setPositive] = useState('positiveMessage')
+  const [message, setMessage] = useState(null)
 
   // nimi ja numero inputtien kirjoituksen tallennus stateen
   const handleInputName = (event) => setNewName(event.target.value)
@@ -70,39 +49,91 @@ const App = () => {
     //estetään vakiotoiminta, joka lataa kokosivun uudestaan lähetyksen myötä
     event.preventDefault()
    
-    //console.log('Tarkista onko duplikaatti', JSON.stringify(persons).includes( newName )) 
     
-    //onko nimi jo lisätty. muutetaan kaikki lowercase, että Arto ja arto ovat samoja. Objectista ei löydy mitään ellei ensin muuta stringiksi
-    const isUnique = JSON.stringify(persons).toLowerCase().includes( newName.toLowerCase() )
-    //  pelkkä etunimi antaa edelleen duplikaatin
+    //onko nimi jo lisätty. muutetaan kaikki lowercase, että Arto ja arto ovat samoja. 
+    const isUnique = persons.find(n=>n.name.toLowerCase() === newName.toLowerCase())
+ 
 
-     // jos ei vielä listalla, tehdään uusi objekti ja lisätään persons-listaan. Jos duplikaatti, annetaan virheilmoitus 
     if (!isUnique){
       const phoneBookObject = {
         name: newName,
         number: newNumber
       }
-      setPersons(persons.concat(phoneBookObject))
+      personServices.create(phoneBookObject)
+      .then(response => {
+        setPersons(persons.concat(response.data))
+        setMessage(`Added ${response.data.name}`)
+        setPositive("positiveMessage")
+        setTimeout(()=>{
+          setMessage(null)
+        },4000)
+      
+      })
+      
     }
      else {
-      alert(`${newName} is already added to phonebook`)
+      if(window.confirm(`${newName} is already added to phonebook, replace the old number with a new one?`)){
+        const phoneBookObject = {
+          name: newName,
+          number: newNumber}
+          const personToUpdate = persons.find(n=>n.name === newName)
+        personServices.update(personToUpdate.id, phoneBookObject)
+        .then(response => {
+          setPersons(persons.map(person => 
+            (person.id !== personToUpdate.id ? person=person : person=response.data )))
+            setMessage(`Updated number of ${personToUpdate.name}`)
+            setPositive("positiveMessage")
+            setTimeout(()=> {
+              setMessage(null)
+            },4000)
+          })
+        .catch(err => {
+          setMessage(`Information of ${newName} has already been removed from server`)
+          setPositive("negativeMessage")
+          setTimeout(()=> {
+            setMessage(null)
+          }, 4000)
+          personServices.getAll()
+          .then(response => {
+            setPersons(response.data)
+          })
+        })
+      }
     }
 
     //nollataan inputin kentät
     setNewName('')
     setNewNumber('')
   }
-
-  // näytetään koko lista tai jos showall = false näytetään inputilla suodatettu lista. stringiksi muutos koska objekti ja lowercase jotta Arto=arto
-  // tässä määriteltävää suodatettua/suodattamatonta listaa käytetään alla ja mapataan jokainen rivi
+  
+  const handleDelete = (id,name) => {
+    if(window.confirm(`Delete ${name}?`)){
+      personServices.remove(id)
+      .then(response => {
+        setPersons(persons.filter(n => n.id !== id))
+      })
+      .catch(err => {
+        setMessage(`Information of ${name} has already been removed from server`)
+        setPositive("negativeMessage")
+        setTimeout(()=> {
+          setMessage(null)
+        }, 4000)
+        personServices.getAll()
+          .then(response => {
+            setPersons(response.data)
+          })
+      })
+    }
+  }
+  // näytetään koko lista tai jos showall = false näytetään inputilla suodatettu lista. 
   const filteredList = showAll
     ? persons
-    : persons.filter(person => JSON.stringify(person).toLowerCase().includes(newFilter.toLowerCase()))
-    
+    : persons.filter(person => person.name.toLowerCase().includes(newFilter.toLowerCase()))
    
   return (
     <div>
       <h1>Phonebook</h1>
+      <Notification message={message} positive={positive} />
 
         <Filter handleInputFilter={handleInputFilter} />
 
@@ -112,9 +143,9 @@ const App = () => {
       
       <h2>Numbers</h2>
       
-      {filteredList.map(list => 
-          <ListNumbers key={list.name} name={list.name} number={list.number} />
-        )}
+      
+          <ListNumbers filteredList={filteredList} handleDelete={handleDelete} />
+      
       
     </div>
   )
