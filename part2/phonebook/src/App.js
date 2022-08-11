@@ -134,19 +134,11 @@ const App = () => {
     <div>
       <h1>Phonebook</h1>
       <Notification message={message} positive={positive} />
-
-        <Filter handleInputFilter={handleInputFilter} />
-
+      <Filter handleInputFilter={handleInputFilter} />
       <h2>Add a new</h2>
-
       <Form handleSubmit={handleSubmit} handleInputName={handleInputName} newName={newName} handleInputNumber={handleInputNumber} newNumber={newNumber} />
-      
       <h2>Numbers</h2>
-      
-      
-          <ListNumbers filteredList={filteredList} handleDelete={handleDelete} />
-      
-      
+      <ListNumbers filteredList={filteredList} handleDelete={handleDelete} />
     </div>
   )
 }
